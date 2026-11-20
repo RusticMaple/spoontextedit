@@ -1,6 +1,8 @@
 use std::cmp::Ordering;
 use std::error::Error;
+use std::marker::PhantomData;
 use std::mem::{offset_of, size_of};
+use std::str::FromStr;
 use std::string::FromUtf8Error;
 use bytemuck::cast_slice;
 use bytemuck::checked::try_cast_slice;
@@ -40,11 +42,11 @@ pub mod file_repr {
     }
 
     #[repr(C, packed)]
-    #[derive(Clone, Copy, Pod, Zeroable)]
+    #[derive(Clone, Copy, Pod, Zeroable, Debug)]
     pub struct Version(u8, u8);
 
     #[repr(C, packed)]
-    #[derive(Copy, Clone, Pod, Zeroable)]
+    #[derive(Copy, Clone, Pod, Zeroable, Debug)]
     pub(crate) struct Header {
         magic: [u8; 8],
         pub bom: [u8; 2],
@@ -97,7 +99,7 @@ pub mod file_repr {
     }
 
     #[repr(C)]
-    #[derive(Copy, Clone, Pod, Zeroable)]
+    #[derive(Copy, Clone, Pod, Zeroable, Debug)]
     pub(crate) struct Label1Header {
         magic: [u8; 4],
         pub table_size: u32,
@@ -140,7 +142,7 @@ pub mod file_repr {
     }
 
     #[repr(C)]
-    #[derive(Copy, Clone, Pod, Zeroable)]
+    #[derive(Copy, Clone, Pod, Zeroable, Debug)]
     pub(crate) struct Attribute1Header {
         magic: [u8; 4],
         pub table_size: u32,
@@ -227,7 +229,8 @@ pub mod file_repr {
 pub enum TextCommandError {
     #[error("text command was cut off")]
     CutOff,
-
+    #[error("expected null but found something else")]
+    NullAssertFailed,
     #[error("Unable to find end of text command")]
     NoEnd,
     #[error("invalid or unimplemented text command found in unit {0}: {1:#06x} \ntext builder result before invalid value: {2} ")]
@@ -370,6 +373,7 @@ macro_rules! special_translation_unit{
     }
 }
 
+#[derive(Debug)]
 pub struct Msbt {
     // we will be storing the header, full label1 section and full attribute1 section as
     // we do now have enough information on them to decode and regenerate them
@@ -384,6 +388,7 @@ pub struct Msbt {
     pub texts: Vec<String>,
 }
 
+#[derive(Debug)]
 pub struct Label {
     pub name: String,
     pub index: u32,
@@ -443,6 +448,20 @@ mod i32_value_unit{
     }
 }
 
+mod null_unit{
+    use crate::msbt::TextCommandError;
+
+    pub(crate) fn bin_to_text(iter: &mut impl Iterator<Item = u16>, _bom: [u8;2]) -> Result<String, TextCommandError> {
+        if iter.next().ok_or(TextCommandError::CutOff)? != 0{
+            return Err(TextCommandError::NullAssertFailed);
+        }
+        Ok("".to_string())
+    }
+
+    pub(crate) fn text_to_bin(data: &str, bom: [u8; 2]) -> Result<Vec<u16>, TextCommandError>{
+        Ok(vec![0])
+    }
+}
 
 special_translation_unit!(font_large_unit{
    (0x0002, "Size=") => (crate::msbt::i16_value_unit)
@@ -456,7 +475,7 @@ special_translation_unit!(font_normal_unit{
 special_translation_unit!(text_modifier_unit {
     (0x0002, "FontLarge.") => (crate::msbt::font_large_unit),
     (0x0003, "FontNormal.") => (crate::msbt::font_normal_unit),
-    (0x0004, "WaitA") => (crate::msbt::finish_unit)
+    (0x0004, "WaitA") => (crate::msbt::null_unit)
 });
 
 /*

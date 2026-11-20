@@ -3,8 +3,6 @@
 
 use std::fs;
 use walkdir::WalkDir;
-use eframe::web_sys;
-use eframe::wasm_bindgen::JsCast;
 
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
@@ -33,6 +31,8 @@ fn main() -> eframe::Result<()> {
 // When compiling to web using trunk:
 #[cfg(target_arch = "wasm32")]
 fn main() {
+    use eframe::web_sys;
+    use eframe::wasm_bindgen::JsCast;
     // Redirect `log` message to `console.log` and friends:
     eframe::WebLogger::init(log::LevelFilter::Debug).ok();
 
