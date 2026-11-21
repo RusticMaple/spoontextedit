@@ -1,22 +1,28 @@
+use crate::msbt;
+use crate::msbt::file_repr::{
+    Attribute1Header, Header, Label1Header, LabelOffsetTableNode, Text2Header,
+};
+use crate::msbt::LoadError::{
+    InvalidAttribute1Header, InvalidHeader, InvalidLabel1Header, InvalidTableElement,
+    InvalidText2Header, LabelRead, NotEnoughTexts, TableElementNotFound, TextCommand,
+    UnableToFindHeader, UnableToFindTable,
+};
+use crate::msbt::TextCommandError::{CutOff, InvalidOrUnimplemented, InvalidTextCommand, NoEnd};
+use bytemuck::cast_slice;
+use bytemuck::checked::try_cast_slice;
 use std::cmp::Ordering;
 use std::error::Error;
 use std::marker::PhantomData;
 use std::mem::{offset_of, size_of};
 use std::str::FromStr;
 use std::string::FromUtf8Error;
-use bytemuck::cast_slice;
-use bytemuck::checked::try_cast_slice;
 use thiserror::Error;
-use crate::msbt;
-use crate::msbt::file_repr::{Attribute1Header, Header, Label1Header, LabelOffsetTableNode, Text2Header};
-use crate::msbt::LoadError::{InvalidAttribute1Header, InvalidHeader, InvalidLabel1Header, InvalidText2Header, LabelRead, InvalidTableElement, TableElementNotFound, UnableToFindHeader, UnableToFindTable, NotEnoughTexts, TextCommand};
-use crate::msbt::TextCommandError::{CutOff, InvalidOrUnimplemented, InvalidTextCommand, NoEnd};
 
 pub mod file_repr {
-    use bytemuck::{Pod, Zeroable};
-    use thiserror::Error;
     use crate::msbt::file_repr::HeaderValidationError::{InvalidBom, InvalidMagic};
     use crate::msbt::LoadError;
+    use bytemuck::{Pod, Zeroable};
+    use thiserror::Error;
 
     pub const BIG_ENDIAN: [u8; 2] = [0xFE, 0xFF];
     pub const LITTLE_ENDIAN: [u8; 2] = [0xFF, 0xFE];
@@ -64,7 +70,6 @@ pub mod file_repr {
         unknown7: u16,
     }
 
-
     #[derive(Error, Debug)]
     pub(crate) enum HeaderValidationError {
         #[error("Invalid Bom")]
@@ -75,49 +80,31 @@ pub mod file_repr {
 
     impl Header {
         const MAGIC: [u8; 8] = [
-            'M' as u8,
-            's' as u8,
-            'g' as u8,
-            'S' as u8,
-            't' as u8,
-            'd' as u8,
-            'B' as u8,
-            'n' as u8];//MsgStdBn
-
+            'M' as u8, 's' as u8, 'g' as u8, 'S' as u8, 't' as u8, 'd' as u8, 'B' as u8, 'n' as u8,
+        ]; //MsgStdBn
 
         pub fn check_and_correct(&mut self) -> Result<(), HeaderValidationError> {
             valid_values!((self.magic) != { Self::MAGIC } => InvalidMagic(&Self::MAGIC, self.magic.into()));
             valid_values!((self.bom) != { BIG_ENDIAN, LITTLE_ENDIAN } => InvalidBom);
-
 
             self.byteswap(self.bom);
 
             Ok(())
         }
 
-        byteswap!(file_size,sections);
+        byteswap!(file_size, sections);
     }
 
-<<<<<<< HEAD
-    #[repr(C, packed(1))]
-    #[derive(Copy, Clone, Pod, Zeroable)]
-=======
     #[repr(C)]
     #[derive(Copy, Clone, Pod, Zeroable, Debug)]
->>>>>>> f2a2dda121ce45fa127481c3b38d44e793095e70
     pub(crate) struct Label1Header {
         magic: [u8; 4],
         pub table_size: u32,
         padding: u64,
     }
 
-
     impl Label1Header {
-        const MAGIC: [u8; 4] = [
-            'L' as u8,
-            'B' as u8,
-            'L' as u8,
-            '1' as u8, ];
+        const MAGIC: [u8; 4] = ['L' as u8, 'B' as u8, 'L' as u8, '1' as u8];
 
         pub fn check_and_correct(&mut self, bom: [u8; 2]) -> Result<(), HeaderValidationError> {
             valid_values!((self.magic) != {Self::MAGIC} => InvalidMagic(&Self::MAGIC, self.magic.into()));
@@ -143,12 +130,10 @@ pub mod file_repr {
 
             Ok(())
         }
-        byteswap!(count,offset);
+        byteswap!(count, offset);
     }
 
     #[repr(C, packed(1))]
-    #[derive(Copy, Clone, Pod, Zeroable)]
-    #[repr(C)]
     #[derive(Copy, Clone, Pod, Zeroable, Debug)]
     pub(crate) struct Attribute1Header {
         magic: [u8; 4],
@@ -157,11 +142,7 @@ pub mod file_repr {
     }
 
     impl Attribute1Header {
-        const MAGIC: [u8; 4] = [
-            'A' as u8,
-            'T' as u8,
-            'R' as u8,
-            '1' as u8, ];
+        const MAGIC: [u8; 4] = ['A' as u8, 'T' as u8, 'R' as u8, '1' as u8];
 
         pub fn check_and_correct(&mut self, bom: [u8; 2]) -> Result<(), HeaderValidationError> {
             self.byteswap(bom);
@@ -183,11 +164,7 @@ pub mod file_repr {
     }
 
     impl Text2Header {
-        pub(crate) const MAGIC: [u8; 4] = [
-            'T' as u8,
-            'X' as u8,
-            'T' as u8,
-            '2' as u8, ];
+        pub(crate) const MAGIC: [u8; 4] = ['T' as u8, 'X' as u8, 'T' as u8, '2' as u8];
 
         pub fn check_and_correct(&mut self, bom: [u8; 2]) -> Result<(), HeaderValidationError> {
             self.byteswap(bom);
@@ -202,32 +179,32 @@ pub mod file_repr {
 
     #[derive(Copy, Clone, Pod, Zeroable)]
     #[repr(C, packed(1))]
-    pub struct PictureData{
+    pub struct PictureData {
         pub(crate) unk_1: i16,
         pub(crate) unk_2: i16,
         pub(crate) unk_3: i32,
         pub(crate) unk_4: i32,
-        pub(crate) unk_5: i16
+        pub(crate) unk_5: i16,
     }
 
     #[cfg(test)]
     mod tests {
-        use std::mem::size_of;
         use super::*;
+        use std::mem::size_of;
         #[test]
         fn test_size_pic_data() {
             assert_eq!(size_of::<Header>(), 0x20);
             assert_eq!(size_of::<Label1Header>(), 0x10);
 
             assert_eq!(size_of::<PictureData>(), 14);
-            assert_eq!(size_of::<i32>() * 2 + size_of::<i16>() * 3, size_of::<PictureData>());
-
-
-
+            assert_eq!(
+                size_of::<i32>() * 2 + size_of::<i16>() * 3,
+                size_of::<PictureData>()
+            );
         }
     }
 
-    impl PictureData{
+    impl PictureData {
         byteswap!(unk_1, unk_2, unk_3, unk_4, unk_5);
     }
 }
@@ -247,7 +224,7 @@ pub enum TextCommandError {
     #[error("invalid text command name : \"{0}\"")]
     InvalidCommandName(String),
     #[error("invalid value whilest trying to parse text: {0}")]
-    InvalidValue(String, Option<Box<dyn Error>>)
+    InvalidValue(String, Option<Box<dyn Error>>),
 }
 
 #[derive(Error, Debug)]
@@ -279,25 +256,25 @@ pub enum LoadError {
 }
 macro_rules! ensure_size {
     (($slice:ident <= $size:expr) => $err:expr ) => {
-        if($slice.len() <= $size as usize){
+        if ($slice.len() <= $size as usize) {
             return Err($err);
         }
     };
 
     (($slice:ident == $size:expr) => $err:expr ) => {
-        if($slice.len() == $size as usize){
+        if ($slice.len() == $size as usize) {
             return Err($err);
         }
     };
 
     (($slice:ident < $size:expr) => $err:expr ) => {
-        if($slice.len() < $size as usize){
+        if ($slice.len() < $size as usize) {
             return Err($err);
         }
     };
 
     (($slice:ident != $size:expr) => $err:expr ) => {
-        if($slice.len() != $size as usize){
+        if ($slice.len() != $size as usize) {
             return Err($err);
         }
     };
@@ -312,8 +289,9 @@ macro_rules! ensure_allign {
 
 macro_rules! byteswap_manual_inline {
     ($val:ident, $bom:ident) => {
-        if  $bom == file_repr::BIG_ENDIAN && cfg!(target_endian = "little") ||
-            $bom == file_repr::LITTLE_ENDIAN && cfg!(target_endian = "big"){
+        if $bom == file_repr::BIG_ENDIAN && cfg!(target_endian = "little")
+            || $bom == file_repr::LITTLE_ENDIAN && cfg!(target_endian = "big")
+        {
             $val.swap_bytes()
         } else {
             $val
@@ -401,32 +379,40 @@ pub struct Label {
     pub index: u32,
 }
 
-mod finish_unit{
+mod finish_unit {
     use crate::msbt::TextCommandError;
 
-    pub(crate) fn bin_to_text(_iter: &mut impl Iterator<Item = u16>, _bom: [u8;2]) -> Result<String, TextCommandError> {
+    pub(crate) fn bin_to_text(
+        _iter: &mut impl Iterator<Item = u16>,
+        _bom: [u8; 2],
+    ) -> Result<String, TextCommandError> {
         Ok(String::new())
     }
 
-    pub(crate) fn text_to_bin(_data: &str, _bom: [u8;2]) -> Result<Vec<u16>, TextCommandError>{
+    pub(crate) fn text_to_bin(_data: &str, _bom: [u8; 2]) -> Result<Vec<u16>, TextCommandError> {
         Ok(Vec::new())
     }
 }
 
-mod i16_value_unit{
-    use bytemuck::{cast, cast_slice};
+mod i16_value_unit {
+    use crate::msbt::file_repr;
     use crate::msbt::TextCommandError;
     use crate::msbt::TextCommandError::{CutOff, NoEnd};
-    use crate::msbt::file_repr;
+    use bytemuck::{cast, cast_slice};
 
-    pub(crate) fn bin_to_text(iter: &mut impl Iterator<Item = u16>, _bom: [u8;2]) -> Result<String, TextCommandError> {
-        Ok(cast::<_,i16>(iter.next().ok_or(CutOff)?).to_string())
+    pub(crate) fn bin_to_text(
+        iter: &mut impl Iterator<Item = u16>,
+        _bom: [u8; 2],
+    ) -> Result<String, TextCommandError> {
+        Ok(cast::<_, i16>(iter.next().ok_or(CutOff)?).to_string())
     }
 
-    pub(crate) fn text_to_bin(data: &str, bom: [u8; 2]) -> Result<Vec<u16>, TextCommandError>{
+    pub(crate) fn text_to_bin(data: &str, bom: [u8; 2]) -> Result<Vec<u16>, TextCommandError> {
         //let len = data.find(">").ok_or(NoEnd)?;
         //let data = &data[..len];
-        let mut val = data.parse::<i16>().map_err(|e| TextCommandError::InvalidValue(data.to_owned(), Some(Box::new(e))))?;
+        let mut val = data
+            .parse::<i16>()
+            .map_err(|e| TextCommandError::InvalidValue(data.to_owned(), Some(Box::new(e))))?;
 
         byteswap_manual!(val, bom);
 
@@ -434,20 +420,25 @@ mod i16_value_unit{
     }
 }
 
-mod i32_value_unit{
-    use bytemuck::{cast, cast_slice};
+mod i32_value_unit {
+    use crate::msbt::file_repr;
     use crate::msbt::TextCommandError;
     use crate::msbt::TextCommandError::{CutOff, NoEnd};
-    use crate::msbt::file_repr;
+    use bytemuck::{cast, cast_slice};
 
-    pub(crate) fn bin_to_text(iter: &mut impl Iterator<Item = u16>, _bom: [u8;2]) -> Result<String, TextCommandError> {
-        Ok(cast::<_,i32>(iter.next().ok_or(CutOff)?).to_string())
+    pub(crate) fn bin_to_text(
+        iter: &mut impl Iterator<Item = u16>,
+        _bom: [u8; 2],
+    ) -> Result<String, TextCommandError> {
+        Ok(cast::<_, i32>(iter.next().ok_or(CutOff)?).to_string())
     }
 
-    pub(crate) fn text_to_bin(data: &str, bom: [u8; 2]) -> Result<Vec<u16>, TextCommandError>{
+    pub(crate) fn text_to_bin(data: &str, bom: [u8; 2]) -> Result<Vec<u16>, TextCommandError> {
         //let len = data.find(">").ok_or(NoEnd)?;
         //let data = &data[..len];
-        let mut val = data.parse::<i32>().map_err(|e| TextCommandError::InvalidValue(data.to_owned(), Some(Box::new(e))))?;
+        let mut val = data
+            .parse::<i32>()
+            .map_err(|e| TextCommandError::InvalidValue(data.to_owned(), Some(Box::new(e))))?;
 
         byteswap_manual!(val, bom);
 
@@ -455,17 +446,20 @@ mod i32_value_unit{
     }
 }
 
-mod null_unit{
+mod null_unit {
     use crate::msbt::TextCommandError;
 
-    pub(crate) fn bin_to_text(iter: &mut impl Iterator<Item = u16>, _bom: [u8;2]) -> Result<String, TextCommandError> {
-        if iter.next().ok_or(TextCommandError::CutOff)? != 0{
+    pub(crate) fn bin_to_text(
+        iter: &mut impl Iterator<Item = u16>,
+        _bom: [u8; 2],
+    ) -> Result<String, TextCommandError> {
+        if iter.next().ok_or(TextCommandError::CutOff)? != 0 {
             return Err(TextCommandError::NullAssertFailed);
         }
         Ok("".to_string())
     }
 
-    pub(crate) fn text_to_bin(data: &str, bom: [u8; 2]) -> Result<Vec<u16>, TextCommandError>{
+    pub(crate) fn text_to_bin(data: &str, bom: [u8; 2]) -> Result<Vec<u16>, TextCommandError> {
         Ok(vec![0])
     }
 }
@@ -507,21 +501,24 @@ fn decompile_text_modifier(data: &mut impl Iterator<Item=u16>, bom: [u8; 2]) -> 
     }
  */
 
-mod symbol_unit{
-    use std::mem::size_of;
-    use bytemuck::{cast, cast_slice};
+mod symbol_unit {
     use crate::msbt::file_repr::PictureData;
     use crate::msbt::TextCommandError;
     use crate::msbt::TextCommandError::{CutOff, InvalidValue};
+    use bytemuck::{cast, cast_slice};
+    use std::mem::size_of;
 
-    pub(crate) fn bin_to_text(iter: &mut impl Iterator<Item = u16>, bom: [u8;2]) -> Result<String, TextCommandError> {
+    pub(crate) fn bin_to_text(
+        iter: &mut impl Iterator<Item = u16>,
+        bom: [u8; 2],
+    ) -> Result<String, TextCommandError> {
         let mut data: Vec<u16> = Vec::new();
 
-        for _ in 0..size_of::<PictureData>()/2{
+        for _ in 0..size_of::<PictureData>() / 2 {
             data.push(iter.next().ok_or(CutOff)?);
         }
 
-        let mut data: PictureData =  cast_slice(&data)[0];
+        let mut data: PictureData = cast_slice(&data)[0];
 
         data.byteswap(bom);
 
@@ -530,38 +527,50 @@ mod symbol_unit{
             unk_2,
             unk_3,
             unk_4,
-            unk_5
+            unk_5,
         } = data;
 
-        Ok(format!("Pict{{ {},{},{},{},{} }}", unk_1, unk_2, unk_3, unk_4, unk_5))
+        Ok(format!(
+            "Pict{{ {},{},{},{},{} }}",
+            unk_1, unk_2, unk_3, unk_4, unk_5
+        ))
     }
 
-    pub(crate) fn text_to_bin(data: &str, bom: [u8;2]) -> Result<Vec<u16>, TextCommandError>{
-        if !data.starts_with("Pict{") || !data.ends_with("}"){
+    pub(crate) fn text_to_bin(data: &str, bom: [u8; 2]) -> Result<Vec<u16>, TextCommandError> {
+        if !data.starts_with("Pict{") || !data.ends_with("}") {
             return Err(InvalidValue(data.to_owned(), None));
         }
 
-        let data = &data[5.. data.len()-1];
+        let data = &data[5..data.len() - 1];
 
-        let data_split: Vec<_> = data.split(",")
-            .map(|d| d.replace(" ", "")).collect();
+        let data_split: Vec<_> = data.split(",").map(|d| d.replace(" ", "")).collect();
 
         if !data_split.len() == 5 {
             return Err(InvalidValue(data.to_owned(), None));
         }
 
-        let unk_1 = data_split[0].parse::<i16>().map_err(|e| InvalidValue(data.to_owned(), Some(Box::new(e))))?;
-        let unk_2 = data_split[1].parse::<i16>().map_err(|e| InvalidValue(data.to_owned(), Some(Box::new(e))))?;
-        let unk_3 = data_split[2].parse::<i32>().map_err(|e| InvalidValue(data.to_owned(), Some(Box::new(e))))?;
-        let unk_4 = data_split[3].parse::<i32>().map_err(|e| InvalidValue(data.to_owned(), Some(Box::new(e))))?;
-        let unk_5 = data_split[4].parse::<i16>().map_err(|e| InvalidValue(data.to_owned(), Some(Box::new(e))))?;
+        let unk_1 = data_split[0]
+            .parse::<i16>()
+            .map_err(|e| InvalidValue(data.to_owned(), Some(Box::new(e))))?;
+        let unk_2 = data_split[1]
+            .parse::<i16>()
+            .map_err(|e| InvalidValue(data.to_owned(), Some(Box::new(e))))?;
+        let unk_3 = data_split[2]
+            .parse::<i32>()
+            .map_err(|e| InvalidValue(data.to_owned(), Some(Box::new(e))))?;
+        let unk_4 = data_split[3]
+            .parse::<i32>()
+            .map_err(|e| InvalidValue(data.to_owned(), Some(Box::new(e))))?;
+        let unk_5 = data_split[4]
+            .parse::<i16>()
+            .map_err(|e| InvalidValue(data.to_owned(), Some(Box::new(e))))?;
 
-        let mut pic_dat = PictureData{
+        let mut pic_dat = PictureData {
             unk_1,
             unk_2,
             unk_3,
             unk_4,
-            unk_5
+            unk_5,
         };
 
         pic_dat.byteswap(bom);
@@ -601,7 +610,6 @@ fn decompile_text_command(data: &mut impl Iterator<Item=u16>, bom: [u8; 2]) -> R
     }
  */
 
-
 macro_rules! static_assert {
     ($cond:expr) => {
         #[allow(dead_code)]
@@ -610,15 +618,14 @@ macro_rules! static_assert {
         }
 
         const _: () = static_assertion();
-    }
+    };
 }
-
 
 //static_assert!(core::mem::size_of::<char>() == 4);
 
 impl Msbt {
     fn allign_offset(offset: &mut usize, allignment: usize) {
-        println!("offset % allignment: {}",  *offset % allignment);
+        println!("offset % allignment: {}", *offset % allignment);
         if (*offset % allignment) != 0 {
             *offset += allignment - (*offset % allignment);
         }
@@ -630,10 +637,15 @@ impl Msbt {
         vec![]
     }
 
-    fn read_label(label_section: &[u8], offset: &mut usize, bom: [u8; 2]) -> Result<Label, LoadError> {
+    fn read_label(
+        label_section: &[u8],
+        offset: &mut usize,
+        bom: [u8; 2],
+    ) -> Result<Label, LoadError> {
         let label_size = label_section[*offset];
         let label_begin = &label_section[*offset + 1..];
-        let content = String::from_utf8(label_begin[0..label_size as usize].to_vec()).map_err(|_e| InvalidTableElement("label table"))?;
+        let content = String::from_utf8(label_begin[0..label_size as usize].to_vec())
+            .map_err(|_e| InvalidTableElement("label table"))?;
 
         let id_vec = &label_begin[label_size as usize..label_size as usize + 4].to_vec();
 
@@ -659,10 +671,11 @@ impl Msbt {
         byteswap_manual!(label_count, bom);
         let label_count = label_count as usize;
 
-        let label_nodes: &[LabelOffsetTableNode] = try_cast_slice(&label_section[
-            size_of::<u32>()..
-            size_of::<u32>()+label_count*size_of::<LabelOffsetTableNode>()
-            ]).unwrap();
+        let label_nodes: &[LabelOffsetTableNode] = try_cast_slice(
+            &label_section[size_of::<u32>()
+                ..size_of::<u32>() + label_count * size_of::<LabelOffsetTableNode>()],
+        )
+        .unwrap();
 
         ensure_size!((label_nodes < label_count) => UnableToFindTable("label offset"));
 
@@ -676,13 +689,8 @@ impl Msbt {
             }
         }
 
-
         Ok(labels)
     }
-
-
-
-
 
     fn read_text(text: &[u8], bom: [u8; 2]) -> Result<String, LoadError> {
         let mut str = String::new();
@@ -721,7 +729,6 @@ impl Msbt {
             //str.;
         }
 
-
         Ok(str)
     }
 
@@ -748,7 +755,7 @@ impl Msbt {
         Ok(out)
     }
 
-    fn read_attribute_table(data: &[u8], bom: [u8; 2]) -> Result<Vec<Vec<u8>>, LoadError>{
+    fn read_attribute_table(data: &[u8], bom: [u8; 2]) -> Result<Vec<Vec<u8>>, LoadError> {
         let u32_data: &[u32] = cast_slice(data);
 
         let mut count = u32_data[0];
@@ -758,18 +765,16 @@ impl Msbt {
         byteswap_manual!(attrib_size, bom);
         let attrib_size = attrib_size as usize;
 
-        let mut  attr_data: Vec<Vec<u8>> = Vec::new();
+        let mut attr_data: Vec<Vec<u8>> = Vec::new();
 
-        for i in 0..count{
+        for i in 0..count {
             let offset = attrib_size * i + 2 * size_of::<u32>();
 
-            attr_data.push(data[offset.. offset + attrib_size].to_owned());
+            attr_data.push(data[offset..offset + attrib_size].to_owned());
         }
 
         Ok(attr_data)
     }
-    
-    
 
     //todo: make use try_cast_slice instead of cast_slice in order to avoid panics(its not fine to panic when a user tries to load a file as thats expected to happen)
     //todo: also ensure the slices are cut off propperly before passing them into cast_slice to prevent slop errors (this has already been done on some lines)
@@ -783,15 +788,17 @@ impl Msbt {
 
         offset_counter += size_of::<Header>();
 
-        let header_data: &[Label1Header] = cast_slice(&data[offset_counter..offset_counter+size_of::<Label1Header>()]);
+        let header_data: &[Label1Header] =
+            cast_slice(&data[offset_counter..offset_counter + size_of::<Label1Header>()]);
 
         let mut label1_header = header_data[0];
-        label1_header.check_and_correct(header.bom).map_err(InvalidLabel1Header)?;
+        label1_header
+            .check_and_correct(header.bom)
+            .map_err(InvalidLabel1Header)?;
 
         offset_counter += size_of::<Label1Header>();
 
         //let mut offset_nodes: Vec<LabelOffsetTableNode> = Vec::with_capacity(label1_header.table_size as usize / size_of::<LabelOffsetTableNode>());
-
 
         /*ensure_allign!(begin, node_data => UnableToFindTable("label offset"));
         ensure_size!((node_data < (label1_header.table_size as usize / size_of::<LabelOffsetTableNode>())) => UnableToFindTable("label offset"));*/
@@ -802,36 +809,41 @@ impl Msbt {
             offset_nodes.push(*node);
         }*/
 
-        let label1_section = data[offset_counter..offset_counter + label1_header.table_size as usize].to_owned();
+        let label1_section =
+            data[offset_counter..offset_counter + label1_header.table_size as usize].to_owned();
 
         offset_counter += label1_header.table_size as usize;
 
         Self::allign_offset(&mut offset_counter, 0x10);
 
-        let header_data: &[Attribute1Header] = cast_slice(&data[offset_counter..offset_counter + size_of::<Attribute1Header>()]);
+        let header_data: &[Attribute1Header] =
+            cast_slice(&data[offset_counter..offset_counter + size_of::<Attribute1Header>()]);
 
         let mut attribute1_header = header_data[0];
 
-        attribute1_header.check_and_correct(header.bom).map_err(InvalidAttribute1Header)?;
+        attribute1_header
+            .check_and_correct(header.bom)
+            .map_err(InvalidAttribute1Header)?;
 
         offset_counter += size_of::<Attribute1Header>();
 
         let attributes = Self::read_attribute_table(&data[offset_counter..], header.bom)?;
 
-
-        let attribute1_section = data[offset_counter..offset_counter + attribute1_header.table_size as usize].to_owned();
+        let attribute1_section =
+            data[offset_counter..offset_counter + attribute1_header.table_size as usize].to_owned();
 
         offset_counter += attribute1_header.table_size as usize;
 
         Self::allign_offset(&mut offset_counter, 0x10);
 
-        let header_data: &[Text2Header] =
-            cast_slice(&data[offset_counter..]);
+        let header_data: &[Text2Header] = cast_slice(&data[offset_counter..]);
 
         //ensure_allign!(begin, header_data => UnableToFindHeader("Text 1"));
 
         let mut text2_header = header_data[0];
-        text2_header.check_and_correct(header.bom).map_err(InvalidText2Header)?;
+        text2_header
+            .check_and_correct(header.bom)
+            .map_err(InvalidText2Header)?;
         offset_counter += size_of::<Text2Header>();
 
         let texts = Self::read_text_table(&data[offset_counter..], header.bom)?;
@@ -843,10 +855,8 @@ impl Msbt {
         }
 
         labels.sort_by(|l, r| match l.name.len().cmp(&r.name.len()) {
-            Ordering::Equal => {
-                l.name.cmp(&r.name)
-            }
-            o => o
+            Ordering::Equal => l.name.cmp(&r.name),
+            o => o,
         });
 
         Ok(Msbt {
@@ -857,18 +867,17 @@ impl Msbt {
             attribute1_header,
             labels,
             texts,
-            attributes
+            attributes,
         })
     }
 
-    pub fn resize_to_allign_end<T: num::Num>(vec: &mut Vec<T>){
-        while vec.len() * size_of::<T>() % 0x10 != 0{
+    pub fn resize_to_allign_end<T: num::Num>(vec: &mut Vec<T>) {
+        while vec.len() * size_of::<T>() % 0x10 != 0 {
             vec.push(T::zero());
-
         }
     }
 
-    pub fn build(&self) -> Result<Vec<u8>,TextCommandError>{
+    pub fn build(&self) -> Result<Vec<u8>, TextCommandError> {
         let bom = self.header.bom;
 
         let mut data: Vec<u8> = Vec::new();
@@ -880,7 +889,6 @@ impl Msbt {
         data.extend_from_slice(cast_slice(&[header]));
 
         let mut label1_header = self.label1_header;
-        
 
         label1_header.byteswap(header.bom);
 
@@ -889,11 +897,7 @@ impl Msbt {
 
         Self::resize_to_allign_end(&mut data);
 
-
-
         let mut attrib_header = self.attribute1_header;
-
-
 
         let mut attr1_sect: Vec<u8> = Vec::new();
         let mut attrib_count = self.attributes.len() as u32;
@@ -903,8 +907,7 @@ impl Msbt {
         byteswap_manual!(attrib_length, bom);
         attr1_sect.extend_from_slice(cast_slice(&[attrib_length]));
 
-
-        for attrib in &self.attributes{
+        for attrib in &self.attributes {
             attr1_sect.extend_from_slice(attrib);
         }
 
@@ -936,26 +939,25 @@ impl Msbt {
 
         let mut texts: Vec<u16> = Vec::new();
 
-
-
         Self::resize_to_allign_end(&mut text_offsets);
 
-
-
-        for i in 0..self.texts.len(){
+        for i in 0..self.texts.len() {
             let mut str: &str = &self.texts[i];
 
-            let mut offset_val = (text_offsets.len() * size_of::<u32>() + texts.len() * size_of::<u16>()) as u32;
+            let mut offset_val =
+                (text_offsets.len() * size_of::<u32>() + texts.len() * size_of::<u16>()) as u32;
             byteswap_manual!(offset_val, bom);
 
             text_offsets[1 + i] = offset_val;
 
-            while let Some(pos) = str.find("<"){
-                texts.extend(str[..pos].encode_utf16().map(|v| byteswap_manual_inline!(v, bom)));
+            while let Some(pos) = str.find("<") {
+                texts.extend(
+                    str[..pos]
+                        .encode_utf16()
+                        .map(|v| byteswap_manual_inline!(v, bom)),
+                );
 
-                str = &str[pos+1..];
-
-
+                str = &str[pos + 1..];
 
                 let Some(end_pos) = str.find(">") else {
                     return Err(NoEnd);
@@ -965,7 +967,7 @@ impl Msbt {
 
                 texts.extend(base_unit::text_to_bin(&str[..end_pos], self.header.bom)?);
 
-                str = &str[end_pos+1..];
+                str = &str[end_pos + 1..];
             }
 
             texts.extend(str.encode_utf16().map(|v| byteswap_manual_inline!(v, bom)));
@@ -975,10 +977,11 @@ impl Msbt {
             Self::resize_to_allign_end(&mut texts);
         }
 
-        let mut text_table_header = Text2Header{
+        let mut text_table_header = Text2Header {
             magic: Text2Header::MAGIC,
-            table_size: (text_offsets.len() * size_of::<u32>() + texts.len() * size_of::<u16>()) as u32,
-            _padding: 0
+            table_size: (text_offsets.len() * size_of::<u32>() + texts.len() * size_of::<u16>())
+                as u32,
+            _padding: 0,
         };
 
         text_table_header.byteswap(self.header.bom);
@@ -989,8 +992,8 @@ impl Msbt {
 
         let len = [data.len()];
         let size_data: &[u8] = cast_slice(&len);
-        for i in 0usize..4usize{
-            data[offset_of!(Header, file_size)+i] = size_data[i];
+        for i in 0usize..4usize {
+            data[offset_of!(Header, file_size) + i] = size_data[i];
         }
 
         Ok(data)
