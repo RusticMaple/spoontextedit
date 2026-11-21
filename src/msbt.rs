@@ -96,7 +96,7 @@ pub mod file_repr {
         byteswap!(file_size,sections);
     }
 
-    #[repr(C)]
+    #[repr(C, packed(1))]
     #[derive(Copy, Clone, Pod, Zeroable)]
     pub(crate) struct Label1Header {
         magic: [u8; 4],
@@ -123,7 +123,7 @@ pub mod file_repr {
         byteswap!(table_size);
     }
 
-    #[repr(C)]
+    #[repr(C, packed(1))]
     #[derive(Copy, Clone, Pod, Zeroable)]
     pub(crate) struct LabelOffsetTableNode {
         pub count: u32,
@@ -139,7 +139,7 @@ pub mod file_repr {
         byteswap!(count,offset);
     }
 
-    #[repr(C)]
+    #[repr(C, packed(1))]
     #[derive(Copy, Clone, Pod, Zeroable)]
     pub(crate) struct Attribute1Header {
         magic: [u8; 4],
@@ -165,7 +165,7 @@ pub mod file_repr {
         byteswap!(table_size);
     }
 
-    #[repr(C)]
+    #[repr(C, packed(1))]
     #[derive(Copy, Clone, Pod, Zeroable)]
     pub(crate) struct Text2Header {
         pub(crate) magic: [u8; 4],
@@ -776,7 +776,7 @@ impl Msbt {
             offset_nodes.push(*node);
         }*/
 
-        let label1_section = data[offset_counter..offset_counter + label1_header.table_size as usize + 1].to_owned();
+        let label1_section = data[offset_counter..offset_counter + label1_header.table_size as usize].to_owned();
 
         offset_counter += label1_header.table_size as usize;
 
@@ -854,6 +854,7 @@ impl Msbt {
         data.extend_from_slice(cast_slice(&[header]));
 
         let mut label1_header = self.label1_header;
+        
 
         label1_header.byteswap(header.bom);
 
@@ -880,7 +881,6 @@ impl Msbt {
         for attrib in &self.attributes{
             attr1_sect.extend_from_slice(attrib);
         }
-        Self::resize_to_allign_end(&mut attr1_sect);
 
         attrib_header.table_size = attr1_sect.len() as u32;
 
@@ -897,6 +897,8 @@ impl Msbt {
             attr1_sect.push(0);
             len += 1;
         }*/
+
+        Self::resize_to_allign_end(&mut data);
 
         let mut text_offsets: Vec<u32> = vec![0; self.texts.len() + 1];
 
@@ -933,7 +935,7 @@ impl Msbt {
                     return Err(NoEnd);
                 };
 
-                texts.extend_from_slice(cast_slice::<u8,_>(&[0x00,0x0e]));
+                texts.extend_from_slice(&[0x000eu16.to_be()]);
 
                 texts.extend(base_unit::text_to_bin(&str[..end_pos], self.header.bom)?);
 
