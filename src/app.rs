@@ -134,6 +134,7 @@ impl SpoonTextEdit {
 
             exec_traceback(err_traceback, move || {
                 *file_data = Some(Msbt::load(&content)?);
+                println!("{:#?}", file_data);
                 Ok(())
             });
         }
